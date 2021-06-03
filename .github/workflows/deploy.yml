@@ -1,0 +1,48 @@
+name: Build and Deploy
+
+on:
+  push:
+    branches:
+    - '**'
+
+env:
+  PROJECT_ID: ${{ secrets.GKE_PROJECT }}
+  GKE_CLUSTER: noc    
+  GKE_ZONE: us-central1-a
+  IMAGE: gobuild
+
+jobs:
+  build_and_deploy:
+    name: Build and Deploy Image
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v2
+  
+    - name: Set outputs
+      id: vars
+      run: echo "::set-output name=sha_short::$(git rev-parse --short HEAD)"
+
+    - name: Setup gcloud CLI
+      uses: google-github-actions/setup-gcloud@master
+      with:
+        version: '290.0.1'
+        service_account_key: ${{ secrets.GKE_SA_KEY }}
+        project_id: ${{ secrets.GKE_PROJECT }}
+
+    - name: Configure Docker 
+      run: |-
+        gcloud --quiet auth configure-docker
+        
+    - name: Get The GKE credentials
+      run: |-
+        gcloud container clusters get-credentials "$GKE_CLUSTER" --region us-central1
+  
+    - name: Build Docker Image
+      run: |-
+        docker build --tag "gcr.io/$PROJECT_ID/$IMAGE:1.0.0.${{ steps.vars.outputs.sha_short }}" .
+    
+    - name: Deploys Docker Image
+      run: |
+        docker push "gcr.io/$PROJECT_ID/$IMAGE:1.0.0.${{ steps.vars.outputs.sha_short }}"
